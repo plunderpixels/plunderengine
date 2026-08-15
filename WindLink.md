@@ -37,7 +37,7 @@ Lastly, branch the call sites for people who don't have the Engine installed:
 
 ```glsl
 #ifdef MCWIND
-    delta = mcw_leafSway(worldPos, blockCentre, weld);
+    delta = mcw_leafSway(worldPos, blockCenter, weld);
 #else
     delta = myOwnLeafWave(worldPos);
 #endif
@@ -64,15 +64,15 @@ Call these inside `#ifdef MCWIND`.
 
 | function | gives you |
 |---|---|
-| `mcw_grassHeight(worldPos, blockCentre, upperHalf)` | the height weight the push functions want |
-| `mcw_grassPush(blockCentre, heightWeight)` | horizontal bend for a blade |
-| `mcw_leafWeld(worldPos, blockCentre)` | how anchored a leaf is to its trunk, 0 to 1 |
-| `mcw_leafSway(worldPos, blockCentre, weld)` | full 3D canopy motion |
-| `mcw_vineSwing(worldPos, blockCentre, weld)` | hanging growth, added on top of the sway |
-| `mcw_stalkSway(worldPos, blockCentre, groundY)` | bamboo and cane, bending about the ground |
-| `mcw_fireLean(blockCentre, topWeight)` | flame shear and flicker |
-| `mcw_draftPush(blockCentre, cameraPos, heightWeight)` | the kick from something streaming past |
-| `mcw_groundHeight(blockCentre, cameraPos)` | surface Y, or -1 outside the trusted radius |
+| `mcw_grassHeight(worldPos, blockCenter, upperHalf)` | the height weight the push functions want |
+| `mcw_grassPush(blockCenter, heightWeight)` | horizontal bend for a blade |
+| `mcw_leafWeld(worldPos, blockCenter)` | how anchored a leaf is to its trunk, 0 to 1 |
+| `mcw_leafSway(worldPos, blockCenter, weld)` | full 3D canopy motion |
+| `mcw_vineSwing(worldPos, blockCenter, weld)` | hanging growth, added on top of the sway |
+| `mcw_stalkSway(worldPos, blockCenter, groundY)` | bamboo and cane, bending about the ground |
+| `mcw_fireLean(blockCenter, topWeight)` | flame shear and flicker |
+| `mcw_draftPush(blockCenter, cameraPos, heightWeight)` | the kick from something streaming past |
+| `mcw_groundHeight(blockCenter, cameraPos)` | surface Y, or -1 outside the trusted radius |
 | `mcw_honami(objectNormal, push)` | the bent normal, so a field catches light in travelling bands |
 | `mcw_windPhase` | seconds on the wind clock. A macro, and overridable |
 
