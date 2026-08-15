@@ -2,24 +2,20 @@
 
 MCWIND is injected instead and not vendored.
 
-This allows a much smoother ride towards capturing real wind in your shaderpack. 
-it allows significantly better development turnover and adoption speed, I can test things
-out compatibility with packs quickly and nothing breaks unless the mod itself is broken.
+This allows a much smoother ride towards capturing real wind in your shaderpack. it allows significantly better development turnover and adoption speed, I can test things out compatibility with packs quickly and nothing breaks unless the mod itself is broken.
 
 ---
 
-## 1. The whole contract
+## 1\. The whole contract
 
 Build `shaders/mcwind/mcwind.glsl`, you **should** write these two comment lines but it shouldn't matter too much.
-
 
 ```glsl
 // Deliberately empty. A MCWIND provider replaces the contents of this file at pack load.
 // Do not paste anything here and do not delete it.
 ```
 
-`mcwind.glsl` **must exist and not be deleted** It's the backbone of the entire WindLink Engine that receives all of the
-injection data. Removing it will create a compilation failure.
+`mcwind.glsl` **must exist and not be deleted** It's the backbone of the entire WindLink Engine that receives all of the injection data. Removing it will create a compilation failure.
 
 Include this line **anywhere** you want WindLink's functions:
 
@@ -45,25 +41,71 @@ Lastly, branch the call sites for people who don't have the Engine installed:
 
 ---
 
-## 2. Directives
+## 2\. Versioning
+
+**Ignore the PlunderEngine and WindLink mod versions.** Those are for players and for the launcher. They move independently to the injection. 
+
+`MCWIND_PROVIDER_VERSION`, is what you should look for which is defined in your pack by the injection itself:
+
+```
+major * 10000 + minor * 100 + patch
+```
+
+It is currently **11100**, which is 1.11.0. It bumps with the provider and never with the mod versions, so this is what you should build against to find out if anyhting has changed.
+
+```glsl
+#if MCWIND_PROVIDER_VERSION >= 11100
+    mcw_Voxel v = mcw_readVoxel(worldPos, cameraPosition);
+#else
+    mcw_Voxel v = mcw_readVoxel(worldPos);
+#endif
+```
+
+Both the environment define and the injected text publish the same value, so there is no way to be handed two separate answers
+
+Patch = is a fix with no symbol changes.  
+Minor = adds symbols without touching existing ones  
+Major = changes the behavior of something you call already and arrives as an optional opt in so it doesn't break your pack on any version.
+
+`MCWIND_PROVIDER_VERSION` only tells you which provider you got.
+
+**The header used to open with** `v0.1 UNSTABLE` **it no longer does.**
+
+**One name changed on the way out, and it is the only one.** `mcw_Advect.weight` is now `mcw_Advect.weightA`. If you built against the fog API in 0.1.13-beta you will need to rename it. This will not be a habitual thing now that MCWIND is **STABLE**.
+
+The `A` is not decoration. **It is the weight of sample `a`**, so `a` goes second in the mix:
+
+```glsl
+float d = mix(myNoise(adv.b), myNoise(adv.a), adv.weightA);   // correct
+float d = mix(myNoise(adv.a), myNoise(adv.b), adv.weightA);   // backwards, and it compiles
+```
+
+The second looks natural but it's wrong. I renamed it because having it backwards causes a bad jump when the age fully wraps around from being handed full weight at the end.
+
+The game now shows the PlunderEngine version and the WindLink and MCWIND versions on the PlunderEngine settings screen, as **MCWIND Injector 1.11.0 (11100)**.
+
+---
+
+## 3\. Directives
 
 In your `shaders.properties` these are read before the header gets served. They are decisive.
 
 | directive | default | what it does |
-|---|---|---|
+| --- | --- | --- |
 | `mcwind.field` | off | the foliage responses as well as the channel decode. You want this unless you only want raw data |
 | `mcwind.volume` | off | the fog and smoke API. Implies `mcwind.field`, because it is built on the wind field |
 | `mcwind.occupancy` | off | the voxel occupancy volume. Costs a texture image unit in every program that includes us |
 | `mcwind.lightcells` | off | the light cell volume. Same cost |
+| `mcwind.weather` | off | the weather decode: storm cells, snow bands, precipitation edges. Implies nothing, because it reads published uniforms and calls no field maths, so a sky pack can take it without buying foliage wind it will never call |
 
 ---
 
-## 3. What you get
+## 4\. What you get
 
 Call these inside `#ifdef MCWIND`.
 
 | function | gives you |
-|---|---|
+| --- | --- |
 | `mcw_grassHeight(worldPos, blockCenter, upperHalf)` | the height weight the push functions want |
 | `mcw_grassPush(blockCenter, heightWeight)` | horizontal bend for a blade |
 | `mcw_leafWeld(worldPos, blockCenter)` | how anchored a leaf is to its trunk, 0 to 1 |
@@ -71,15 +113,71 @@ Call these inside `#ifdef MCWIND`.
 | `mcw_vineSwing(worldPos, blockCenter, weld)` | hanging growth, added on top of the sway |
 | `mcw_stalkSway(worldPos, blockCenter, groundY)` | bamboo and cane, bending about the ground |
 | `mcw_fireLean(blockCenter, topWeight)` | flame shear and flicker |
+| `mcw_rainLean(worldPos, topWeight)` | falling rain tilted into the wind |
 | `mcw_draftPush(blockCenter, cameraPos, heightWeight)` | the kick from something streaming past |
 | `mcw_groundHeight(blockCenter, cameraPos)` | surface Y, or -1 outside the trusted radius |
-| `mcw_honami(objectNormal, push)` | the bent normal, so a field catches light in travelling bands |
+| `mcw_honami(objectNormal, push)` | the bent normal, so a field catches light in traveling bands |
 | `mcw_windPhase` | seconds on the wind clock. A macro, and overridable |
+
+**`mcw_rainLean` is for your weather program.** Add it to the vertex position of a rain or snow quad, with `topWeight` running 1 at the top of the streak and 0 at the bottom:
+
+```glsl
+vec4 pos = gl_Vertex;
+vec3 world = pos.xyz + cameraPosition;
+float topWeight = clamp(pos.y / 16.0 + 0.5, 0.0, 1.0);
+pos.xyz += mcw_rainLean(world, topWeight);
+```
+
+**Do not take that weight from `texcoord.y`.** Vanilla animates rain by scrolling the texture's V, so it is not 0..1 across a quad.
+
+**Snow is deliberately left alone and returns zero.** A snowflake sprite has no falling streak to tilt, so shearing it slides the sprite sideways and reads as broken rather than as windblown, which rain does not because rain is drawn as a streak. It reads `mcw_readBolt().snow`, the mod's hard answer about the precipitation at the player rather than a biome guess, so you get that for free and do not need to branch. Blown snow wants real particles, and that is a mod-side job rather than a vertex offset.
+
+The tilt is horizontal wind speed over fall speed, and it is clamped, so a storm cannot lay the rain flat.
+
+`MCW_RAIN_LEAN` defaults to **3.0** that is in the middle. Other dials: `MCW_RAIN_FALL` (1.0) and `MCW_RAIN_MAX` (3.0).
+
+Sample it at the quad's true world position, not a block center. Rain is not block-aligned and snapping it would band the lean across the sky.
+
+You can already shear your own weather, of course. What this gives you is that the shear **agrees with the grass, the fog and the dust in the same frame**.
 
 **Two important sampling rules**
 
-- **Grass samples at block center,** per vertex sampling will cause them to shear apart.
-- **Leaves sample per vertex,** sampling texel centers makes it slab and staircase. Anyone reading this should know that.
+-   **Grass samples at block center,** per vertex sampling will cause them to shear apart.
+-   **Leaves sample per vertex,** sampling texel centers makes it slab and staircase. Anyone reading this should know that.
+
+---
+
+### The Channel Decode
+
+The functions above are the foliage responses, which comes from `mcwind.field`. Underneath them are the channel decodes, which is from the marker file alone. These are the raw read outs that the response comes from. You can use them for anything really. *I'm only suggesting for what.*
+
+Every one returns a struct whose first member is `known`. **`known == false` means the channel doesn't have data for it** or no producer for it. If outside its trusted radius, or the feature is switched off in the player's settings it will show false so as not to break things. It never means zero. **Build fallbacks for false.**
+
+| function | returns |
+| --- | --- |
+| `mcw_readClock()` | `{ bool known; float seconds; }` the wind clock |
+| `mcw_readCtl()` | `{ bool known; float drive; float strength; float gustFloor; float flash; }` the player's dials |
+| `mcw_readSeason()` | `{ bool known; float phase; }` phase 0..4, spring through winter |
+| `mcw_readBolt()` | `{ bool known; bool snow; vec3 dir; }` lightning direction and whether it is snowing |
+| `mcw_readCover()` | `{ bool known; bool modDrawsGrass; }` whether the mod is drawing its own grass |
+| `mcw_readSpriteMetrics()` | `{ bool known; float shortBlade; float tallBlade; }` blade heights from the active resource pack |
+| `mcw_readFlow(worldXZ)` | `{ bool known; float speed; vec2 deflect; }` terrain wind flow |
+| `mcw_readGround(worldXZ)` | `{ bool known; float y; float loose; }` surface Y and how loose the ground is |
+| `mcw_readWood(worldXZ)` | `{ bool known; float dist; }` distance to the nearest wood |
+| `mcw_readDraft(worldXZ)` | `{ bool known; vec2 push; }` the kick from passing entities |
+| `mcw_readHeat(worldXZ)` | `{ bool known; float heat; float baseY; }` heat sources and their base |
+| `mcw_readWater(worldXZ)` | `{ bool known; float open; float surfaceY; float cls; float shoreDist; }` |
+| `mcw_readImpulse(i)` | `{ bool known; vec2 pos; float age; float strength; vec2 dir; float seed; float size; }` |
+
+Each has a matching `mcw_trust*(worldXZ, cameraPos)` where it makes sense - `mcw_trustFlow`, `mcw_trustGround`, `mcw_trustWood`, `mcw_trustHeat`, `mcw_trustWater`, `mcw_trustDraft`, `mcw_trustOccupancy` returning 1 near the camera and falling to 0 at the edge of that channel's range. The fade makes it less noticeable. Fade with those instead of branching on `known` as a hard edge.
+
+**Seasons are OFF by default and that is deliberate.** Recolored biomes are extremely visible, so it is opt in. That means `mcw_readSeason().known` is **false on a default install.  
+DO NOT LEAN ON IT** it will be moved to a future weather based mod. I am undecided on how seasonal wind will integrate so it may very well get ripped.  
+This is the only remaining **UNSTABLE** feature.
+
+**`mcw_readWater` carries the shore.** `cls` is the water class and `shoreDist` is the distance to the nearest shore in blocks, both alongside `open` and `surfaceY`. They used to be packed onto the block id, which cost you a lookup (and a whole lot more on [Complementary](https://www.complementary.dev/shaders/)) they are in the channel now.
+
+**`MCW_LEAF_COHERENCE` follows the player.** It defaults to `mcw_leafCoherenceAmount()`, which is the "trees move as one" setting from the mod's own menu. A canopy can hold together coherently or break apart depending on taste. *Define it to a constant above the include if your pack needs to own that decision.*
 
 ---
 
@@ -88,54 +186,102 @@ Call these inside `#ifdef MCWIND`.
 Set `mcwind.volume = true` and you get these analytics.
 
 | function | gives you |
-|---|---|
+| --- | --- |
 | `mcw_windAt(worldPos, t)` | the wind vector at any point in the air, as `vec3` |
-| `mcw_advect(p, t, period)` | two sample positions and a blend weight, for flowmap cycling |
+| `mcw_advect(p, t, period)` | two sample positions and `weightA`, the blend weight for sample `a` |
 | `mcw_windShear(p, t)` | how hard the flow is deforming here, as one number |
 | `mcw_windJacobian(p, t)` | the full velocity gradient, as `mat3` |
 
-**`mcw_advect` exists to save you from creating a noise lookup yourself* and 
-returns the two half offset pahses of a flowmap cycle so they can be crossfaded:
-
+**`mcw_advect` exists to save you from creating a noise lookup yourself** and returns the two half offset phases of a flowmap cycle so they can be crossfaded:
 
 ```glsl
 mcw_Advect adv = mcw_advect(p, mcw_windPhase, 8.0);
-float d = mix(myNoise(adv.b), myNoise(adv.a), adv.weight);
+float d = mix(myNoise(adv.b), myNoise(adv.a), adv.weightA);
 ```
 
-The reseed phase is jittered by `mcw_gust` a coherent field that travels downwind.
-This makes churne read as arrival instead of random blips. The period is quantized so it 
-divides the wind clock exaclty so the sky does lurch ever 2hrs 40min. *(Touch grass get some inspiration if you've been on that long.)*
+The blend field is `weightA` and it belongs to sample `a`, which is why `b` comes first in that `mix`. *See versioning for reason*
 
-**`mcw_windAt` has a vertical profile** this allows fog or smoke to have that signature hugging effect. It moves
-slowly on the ground and moves faster further up. Height gets measured above the real terrain from the ground channel. 
-It gives you real data where the channel reaches then falls back to a fixes reference. Fog gets wind everywhere 
-and terrain awareness is local to the channel range. Y component is zero, orographic lift is planned but not built yet. 
+The reseed phase is jittered by `mcw_gust` a coherent field that travels downwind. This makes churn read as arrival instead of random blips. The period is quantized so it divides the wind clock exactly so the sky does **not** lurch every 2hrs 40min. *(Touch grass get some inspiration if you've on long enough to witness. This is a personal reminder.)*
 
-Dials: `MCW_VOL_REF` (24.0), `MCW_VOL_GROUND` (0.35), `MCW_VOL_SHEAR` (0.30), `MCW_VOL_FALLBACK`, `MCW_VOL_EPS`, `MCW_VOL_JITTER`.
+**`mcw_windAt` has a vertical profile** this allows fog or smoke to have that signature hugging effect. It moves slowly on the ground and moves faster further up. Height gets measured above the real terrain from the ground channel. It gives you real data where the channel reaches then falls back to a fixed reference. Fog gets wind everywhere and terrain awareness is local to the channel range.
+
+**Orographic lift is built.** The Y component is no longer zero. Wind crossing rising ground gets pushed up, wind crossing falling ground gets pulled down. The effect ends up decaying with height above the terrain so fog hugs a slope instead of climbing it forever. It comes from the ground channel. So it reads real terrain.
+
+Dials: `MCW_VOL_REF` (24.0), `MCW_VOL_GROUND` (0.35), `MCW_VOL_SHEAR` (0.30), `MCW_VOL_FALLBACK`, `MCW_VOL_EPS`, `MCW_VOL_JITTER`, `MCW_VOL_DRIFT`.
+
+Lift dials: `MCW_VOL_LIFT` (1.0, 0 switches it off), `MCW_VOL_LIFT_SPAN` (3.0, how far apart the slope is measured), `MCW_VOL_LIFT_FADE` (24.0, the height it decays over), `MCW_VOL_LIFT_MAX` (1.0, the clamp).
+
+**3D curl is built too, and it is off unless you ask for it.** `MCW_VOL_CURL` ships at 0, so `mcw_windAt` returns exactly what it returns without it. Set it and the wind gains divergence-free churn scaled by your local wind speed, so still air stays still. 0.5 is a starting point and 1.0 has more turbulence.
+
+It is added as a vector not just a vert. It will move your horizontal wind too. Keep one part of the curl and it stops being consisten and a flow that can compress is what piles up volumetric fog into sections that come and go. Lift is kinematic and this term is not, so use this for a persistent froxel sim.
+
+Set `mcwind.occupancy = true` as well and the churn is shaped by distance to the nearest solid, so an eddy tightens against a wall a few blocks out instead of the terrain calming the air. Without it you get free-stream churn, doesn't mean its broken. `mcw_volCurlAt(worldPos, groundY, t, speed)` gives you the term on its own, and `mcw_volCarryAt(worldPos, groundY, wallDist)` gives you the anchor blend it uses: 0 is pinned to terrain, 1 is fully carried by the wind. Pass the ground height you already have from `mcw_groundHeight`, or -1 if you do not have one, which reads as free air.
+
+**The eddies ride the wind in free air and pin to terrain near it.** Curl is sampled at a position carried by the same published drift `mcw_advect` uses, so high structure travels downwind at wind speed instead of sitting in world coordinates. Close to the ground or a wall the sample stays near world coordinates, because a shear layer belongs to the ridge that sheds it and not to the air going past. The blend runs over `MCW_VOL_CURL_ANCHOR` (16.0) in height above ground, or over the wall reach if you turned occupancy on, whichever surface is closer.
+
+**That is also where the evolution comes from.** An eddy holds its shape for as long as you watch it, which is what the underlying noise gives. What changes is that air crossing a ridge moves *through* the anchored structure, so a parcel sees the field change continuously without any decorrelation term. If you want eddies that genuinely dissolve and reform, that is your own time axis on top of this. The wall shaping reads the true position throughout, since a wall does not travel with the air.
+
+**Curl is for packs that carry state across frames.** Judged in game: at full strength it plainly restructures the wind field, and it is indistinguishable from off if all you do with it is offset a noise lookup through `mcw_advect`.
+
+That is part of the structure because smooth warp and noise looks like a different noise. A stateless flowmap cannot accumulate a swirl no matter how big it might be. This term stops the piling up of a froxel sim advecting density across frams. If you are warping noise leave it a zero and spend the tap somewhere else.
+
+Curl dials: `MCW_VOL_CURL` (0.0) and `MCW_VOL_CURL_ANCHOR` (16.0).
 
 **Do not sample fog at block center.** `mcw_windAt` needs true world position.
 
-`mcw_windAt` is one wind field eval and a ground read. `mcw_advect` is that +
-a gust tap. `mcw_windJacobian` is four `mcw_windAt` calls, so it is a compositepass tool, not per vertex.
+`mcw_windAt` is one wind field eval and three ground reads, one for the profile and two for the lift gradient. `mcw_advect` is that + a gust tap. `mcw_windJacobian` is four `mcw_windAt` calls, so it is a composite pass tool, not per vertex. Curl adds twelve noise taps per `mcw_windAt`, and a wall search of up to twenty-five voxel reads on top if you turned occupancy on.
 
 ---
 
-## 4. Uniforms
+### Occupancy and Light Cells
 
-**You don't need to declare `frameTimeCounter`, `rainStrength` or `worldTime`.** The engine
-declares them, and only the ones the translation unit does not already have so it cannot collide
-with your own.
+Set `mcwind.occupancy = true` for the voxel volume and `mcwind.lightcells = true` for the light volume. Each costs a texture image unit in every program that includes mcwind, so switch on only what you read.
 
-**You do need to declare what your own code uses**, `cameraPosition` most likely, exactly as you
-already would.
+| function | gives you |
+| --- | --- |
+| `mcw_readVoxel(worldPos, cameraPos)` | `mcw_Voxel { bool known; bool solid; bool sky; float depth; }` |
+| `mcw_readLightCell(worldPos, cameraPos)` | `mcw_LightCell { bool known; vec3 rgb; float level; }` |
+| `mcw_inOccupancy(worldPos, cameraPos)` | whether the volume covers this position at all |
+| `mcw_trustOccupancy(worldXZ, cameraPos)` | 1 near the camera falling to 0 at the window edge, for fading |
 
-Vertex prerequisites are still yours, and all of them fail if they're wrong: absolute
-world coordinates, `at_midBlock` clamped to +/- 2.0 on block id.
+`solid` is the block being there. `sky` is that voxel's air being connected to real sky. `depth` is 0..63, the distance to the nearest sky voxel, which is what you want for cave darkness without a raymarch.
+
+**Always pass the camera. IMPORTANT**
+
+The volume is world-anchored in X and Z: a texel address is `worldXZ mod 96`, so the coordinate IS the address and the window follows you without any origin to publish. Vertically it is 64 slices that move with the camera, which is why `mcw_occBaseY` has to exist at all.
+
+The consequence is that **the horizontal address wraps rather than fails**. A position outside the 96 block window aliases onto a different column that IS in the window, and comes back with `known == true` carrying that other column's data. There is no way for a reader given only a world position to tell the two apart, so the single argument forms `mcw_readVoxel(worldPos)` and `mcw_readLightCell(worldPos)` cannot bounds check and do not try. They still exist, and they are still correct inside the window, but the prefered arguments are:
+
+```glsl
+#if MCWIND_PROVIDER_VERSION >= 11100
+    mcw_Voxel v = mcw_readVoxel(worldPos, cameraPosition);   // known is false outside the window
+#else
+    mcw_Voxel v = mcw_readVoxel(worldPos);                   // known is Y only; check XZ yourself
+#endif
+if (!v.known) {
+    // outside the volume, or the producer has not run. Fall back, do not treat it as empty air.
+}
+```
+
+The window is 96 blocks square, so the two argument forms return `known = false` beyond 48 blocks from the camera on either axis. If you are shading something continuous and a hard edge would show, fade with `mcw_trustOccupancy` instead of branching on `known`.
+
+**`known == false` is a real answer and it is not "empty".** It means the volume cannot speak for this position. This is a failsafe so you don't read it as air which would cause some breakage.
 
 ---
 
-## 5. Tuning
+## 5\. Uniforms
+
+**You don't need to declare `frameTimeCounter`, `rainStrength` or `worldTime`.** The engine declares them, and only the ones the translation unit does not already have so it cannot collide with your own.
+
+**If you set `mcwind.volume = true` you don't need to declare `cameraPosition` either**, for the same reason: the volume half asks for it and the engine adds it if your translation unit does not already have it.
+
+**Everything else your own code uses is still yours to declare**, exactly as you already would.
+
+Vertex prerequisites are still yours, and all of them fail if they're wrong: absolute world coordinates, `at_midBlock` clamped to +/- 2.0 on block id.
+
+---
+
+## 6\. Tuning
 
 **Every dial is a `#define` and they are `#ifndef` guarded.** anything defined **above** the include wins:
 
@@ -155,18 +301,19 @@ Give the player sliders and have them keep your name:
 sliders = MYPACK_LEAF_AMP
 screen.CANOPY = MYPACK_LEAF_AMP
 ```
+
 ```glsl
 #define MYPACK_LEAF_AMP 0.5 // [0.0 0.2 0.35 0.5 0.8 1.0]
 #define MCW_LEAF_AMP MYPACK_LEAF_AMP
 #include "/mcwind/mcwind.glsl"
 ```
-Only one line per dial touches default so the defaults moving will never change your look.
-Make sure an option exists in **both** `sliders` and a `screen.*` or it becomes unreachable.
+
+Only one line per dial touches default so the defaults moving will never change your look. Make sure an option exists in **both** `sliders` and a `screen.*` or it becomes unreachable.
 
 ### The Leaf/Canopy Dials
 
 | dial | default | what it does |
-|---|---|---|
+| --- | --- | --- |
 | `MCW_LEAF_AMP` | 0.5 | master canopy amplitude |
 | `MCW_LEAF_LEAN` | 0.90 | how far the canopy holds over downwind |
 | `MCW_LEAF_STEADY` | 0.24 | leans continuously vs waits for gusts. If turning LEAN up does nothing, this is why |
@@ -182,23 +329,26 @@ Make sure an option exists in **both** `sliders` and a `screen.*` or it becomes 
 | `MCW_LEAF_FLOOR` | 0.4 | the least a leaf may move however close to the trunk |
 | `MCW_FROND_BEND` / `DROOP` / `EXPOSE` / `TIP` | 1.0 / 1.0 / 0.5 / 1.5 | geometry reaching outside its own block: ferns, palms, bushy-leaf packs |
 
-`MCW_GRASS_AMP`, `MCW_GRASS_IDLE`, `MCW_GRASS_CHURN`, `MCW_GRASS_INERTIA`, `MCW_HONAMI`, `MCW_BREEZE`, `MCW_SWELL`, `MCW_EDDY`, `MCW_DRAFT`, `MCW_STYLE`, `MCW_FIRE_LEAN`, `MCW_FIRE_FLICKER`, `MCW_STALK_BEND`, `MCW_STALK_SPAN`, `MCW_VINE_SWING`. 34 in all.
+`MCW_GRASS_AMP`, `MCW_GRASS_IDLE`, `MCW_GRASS_CHURN`, `MCW_GRASS_INERTIA`, `MCW_HONAMI`, `MCW_BREEZE`, `MCW_SWELL`, `MCW_EDDY`, `MCW_DRAFT`, `MCW_STYLE`, `MCW_FIRE_LEAN`, `MCW_FIRE_FLICKER`, `MCW_FIRE_INERTIA`, `MCW_STALK_BEND`, `MCW_STALK_SPAN`, `MCW_VINE_SWING`.
 
-**`MCW_LEAF_REACH`, `MCW_LEAF_FLOOR` and `MCW_LEAF_CLING` are the weld** it should help with anchoring leaves to the trunk.
-Flattening makes the canopy stiff and ridgid and slide off the tree. Looks like a bug like that.
+**`MCW_LEAF_REACH`, `MCW_LEAF_FLOOR` and `MCW_LEAF_CLING` are the weld** it should help with anchoring leaves to the trunk. Flattening makes the canopy stiff and rigid and slide off the tree. Looks like a bug like that.
 
 **`MCW_LEAF_COHERENCE` defaults to the player's own mod setting.** You can override theirs with a constant.
 
-Grass, wind and fire have the same shape: `MCW_GRASS_AMP`, `MCW_GRASS_IDLE`, `MCW_GRASS_CHURN`,
-`MCW_GRASS_INERTIA`, `MCW_HONAMI`, `MCW_BREEZE`, `MCW_SWELL`, `MCW_EDDY`, `MCW_DRAFT`, `MCW_STYLE`,
-`MCW_FIRE_LEAN`, `MCW_FIRE_FLICKER`, `MCW_STALK_BEND`, `MCW_STALK_SPAN`, `MCW_VINE_SWING`. 34 total so far.
+Grass, wind and fire have the same shape as the canopy dials above.
+
+Rain adds `MCW_RAIN_LEAN` (3.0), `MCW_RAIN_FALL` (1.0) and `MCW_RAIN_MAX` (3.0).
+
+The fog and smoke half adds `MCW_VOL_REF`, `MCW_VOL_GROUND`, `MCW_VOL_SHEAR`, `MCW_VOL_FALLBACK`, `MCW_VOL_EPS`, `MCW_VOL_JITTER`, `MCW_VOL_DRIFT`, `MCW_VOL_CURL`, `MCW_VOL_CURL_ANCHOR` and the four `MCW_VOL_LIFT*` dials. The weather half adds `MCW_WX_EDGE`, `MCW_WX_SNOW_BAND`, `MCW_WX_MAX_CELLS` and `MCW_WX_NO_UNIFORMS`.
+
+**54 overridable dials in all**, counting every `#ifndef` guarded define across the four halves: 37 in the field half, 13 in the fog and smoke half, 4 in the weather half, and none in the marker file's own decode. Which of them exist in your pack depends on which directives you set, so a dial from a half you did not ask for is simply not there.
 
 ---
 
-## 6. Reading the Log
+## 7\. Reading the Log
 
 | line | meaning |
-|---|---|
+| --- | --- |
 | `MCWIND injected N lines into /mcwind/mcwind.glsl: the channel decode and the foliage responses` | working |
 | `...: the channel decode only` | you did not set `mcwind.field = true`, so `mcw_leafSway` is not there |
 | `this pack ships no /mcwind/mcwind.glsl` | your marker is missing or in the wrong directory |
@@ -207,7 +357,7 @@ Grass, wind and fire have the same shape: `MCW_GRASS_AMP`, `MCW_GRASS_IDLE`, `MC
 
 ---
 
-- **Iris only.**
-- **`shaders.properties` is yours.**
-- **A new channel needs a new `#ifdef` from you.**
-- **Injection is at pack load.**
+-   **Iris only.**
+-   **`shaders.properties` is yours.**
+-   **A new channel needs a new `#ifdef` from you.**
+-   **Injection is at pack load.**
