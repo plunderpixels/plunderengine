@@ -169,7 +169,7 @@ Every one returns a struct whose first member is `known`. **`known == false` mea
 | `mcw_readCtl()` | `{ bool known; float drive; float strength; float gustFloor; float flash; }` the player's dials |
 | `mcw_readSeason()` | `{ bool known; float phase; }` phase 0..4, spring through winter |
 | `mcw_readBolt()` | `{ bool known; bool snow; vec3 dir; }` lightning direction and whether it is snowing |
-| `mcw_readCover()` | `{ bool known; bool modDrawsGrass; }` whether the mod is drawing its own grass |
+| `mcw_readCover()` | `{ bool known; bool modDrawsGrass; }` whether the mod is drawing its own grass. **Always false since 1.1.15**: the mod-drawn ground cover was cut, so nothing claims that render any more. The channel stays declared and keeps answering, so a pack already branching on it needs no change |
 | `mcw_readSpriteMetrics()` | `{ bool known; float shortBlade; float tallBlade; }` blade heights from the active resource pack |
 | `mcw_readFlow(worldXZ)` | `{ bool known; float speed; vec2 deflect; }` terrain wind flow |
 | `mcw_readGround(worldXZ)` | `{ bool known; float y; float loose; }` surface Y and how loose the ground is |

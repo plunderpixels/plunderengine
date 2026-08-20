@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.5
+## 1.1.15
 
 `MCWIND_PROVIDER_VERSION` **11200**, was 11100 in 0.1.14.
 
