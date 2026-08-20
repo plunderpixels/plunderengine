@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.5
+
+`MCWIND_PROVIDER_VERSION` **11200**, was 11100 in 0.1.14.
+
+Minor bump. Symbols added, nothing you already call behaves differently.
+
+-   **`mcw_windAtFast` for raymarched fog.** A four argument form resolves the ground and flow reads once per ray. Sample the wind once per ray and march your own noise per step.
+-   **The Jacobian stopped differencing step functions.** Ground, wall and flow now read once through a new five argument `mcw_windAt` . Roughly a quarter of the texture reads. Reported from outside by **Koteinik**, thanks G.
+-   **The curl is analytic.** Built from the noise's gradients rather than differenced, so a quarter of the hashes and exactly divergence free instead of nearly.
+-   **Vines got eighteen dials and a fix.** Hanging plants are anchored at the ceiling. Upright vines now compute the inverse. Dial everything to your liking.
+-   **Strands feature got cut from WindLink** see mods like Grassier Grass for a comparable and arguably significantly better feature.
+
 ## 0.1.14
 
 `MCWIND_PROVIDER_VERSION` **11100**, was 11000 in 0.1.13-beta.
