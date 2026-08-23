@@ -331,7 +331,7 @@ The vine responses take it behind two defines, both **`0.0` by default** so your
 
 ### Hanging Lanterns and Chains
 
-Lantern hanging swings, chain hanging swings, and chains with a lantern hanging from it swings together. `mcw_pendantSwing` decides which by reading the world, so it needs `mcwind.occupancy = true`.
+Lantern hanging swings, chain hanging swings, and chains with a lantern hanging from it swings together. `mcw_pendantSwing` decides which by reading the world, so it needs `mcwind.occupancy = true`.
 
 ```glsl
 // one material id for the lantern AND the chain, no argument between them
@@ -342,15 +342,17 @@ position.xyz += mcw_pendantSwing(worldPos, blockCenter);
 
 **Tag the STATE, not the block.** A lantern on the floor is bolted to the floor and a chain lying along x or z is a strut between two walls.
 
-**Lanterns have mass.** so they behave 
+**Lanterns have mass.** so they behave
 
 Rocking between gusts is derived by noise so it doesn't appear like a canned animation.
 
-It takes wind to cause the lantern to lean, a lot more than vines. Doubling the wind speeds increases lean by about 3 degrees. 
+It takes wind to cause the lantern to lean, a lot more than vines. Doubling the wind speeds increases lean by about 3 degrees.
 
 The shove only happens on a gust front. Below `MCW_PENDANT_FRONT` the lantern does not notice the wind changing. This keeps lanterns with a little more memory as the wind shifts due to mass.
 
 **`MCW_PENDANT_FRONT` is in gust per SECOND.** The slope of the smoothed gust sits at 0.014 per second half the time and only reaches 0.066 in the top. So one per-second threshold means the same physical wind event for a two-link hang and a ten-block one. Per swing instead and a long chain is shoved by ordinary breathing while a short one ignores a storm.
+
+**A LONGER CHAIN SWINGS SMALLER, NOT BIGGER.** The swing you see is one angle times each vertex's own drop below the anchor, so an angle that ignored the length would have a ten block chain move ten times as far as a one block hang. The angle therefore falls by the square root of the strand length, the same root the period rises by: a longer pendulum is a slower one, and a slower one takes less out of a broadband gust field. The bottom of a ten block chain ends up moving about three times as far as a one block hang rather than ten times.
 
 **`MCW_PENDANT_MEMORY` is in SWINGS rather than seconds** for the same class of reason. Tying the history window to the pendulum's own period keeps the kernel sampled the same number of times per swing, so a short hang reads as a crisp fast swing instead of as aliased noise.
 
@@ -360,12 +362,18 @@ The shove only happens on a gust front. Below `MCW_PENDANT_FRONT` the lantern do
 | `MCW_PENDANT_SWAY` | `1.0` | how far a front throws it once it has noticed one |
 | `MCW_PENDANT_IDLE` | `1.0` | the rock it rests in between fronts. Zero hangs it dead still |
 | `MCW_PENDANT_HANG` | `1.0` | the steady angle the wind holds it at |
-| `MCW_PENDANT_PERIOD` | `1.15` | seconds for one swing out and back, for a strand one block long. Longer strands scale by the square root of their length |
+| `MCW_PENDANT_PERIOD` | `1.15` | seconds for one swing out and back, for a strand one block long. Longer strands are slower by the square root of their length, and swing through a smaller angle by the same root |
 | `MCW_PENDANT_DAMP` | `0.85` | how much of the swing is gone after one pass |
 | `MCW_PENDANT_MEMORY` | `1.3` | how much wind the shove is built from, in swings |
-| `MCW_PENDANT_TAPS` | `5` | how finely that wind is read. The only one that costs frames per vertex |
+| `MCW_PENDANT_TAPS` | `5` | how finely that wind is read. The only one that costs frames per vertex |
+| `MCW_PENDANT_RADIUS` | `0.35` | HOW FAR IT MAY TRAVEL, in blocks, measured at the bottom of the strand. New in 1.1.17 |
+| `MCW_PENDANT_KNEE` | `0.6` | the fraction of that bound where it starts easing off. New in 1.1.17 |
 
 `MCW_PENDANT_LEAN_MAX` and `MCW_PENDANT_SWAY_MAX` cap the two angles inside the helper. Do not scale the result again outside. The cap is there so a cranked dial cannot lay a lamp flat.
+
+**`MCW_PENDANT_RADIUS` is the third bound and the only one in BLOCKS.**
+
+**You may scale it.** The value you set is multiplied by `mcw_dialPendantRadius`, which is the player's own dial and reads `1.0` when no provider is present, so your number stands on its own and a player who thinks a lamp swings too far can still say so without editing your pack.
 
 `mcw_pendantHang(blockCenter, below, strand)` is the bare pendulum if you already know your own anchor, and `mcw_pendantHold` and `mcw_pendantDrive` are the parts if you want them. Every form takes an optional trailing `float stiffness`, forwarding `MCW_PENDANT_STIFF` when omitted.
 

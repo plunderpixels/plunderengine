@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.17
+
+`MCWIND_PROVIDER_VERSION` **11300**, unchanged from 1.1.16.
+
+No new symbols.
+
+**WindLink now requires PlunderEngine `0.1.17`.** 
+
+-   **`MCW_PENDANT_RADIUS` bounds a lantern's swing in BLOCKS.** Default `0.35`, measured at the bottom of the strand, and multiplied by `mcw_dialPendantRadius` so a player can scale it without editing your pack. 
+-   **Hanging signs swing with no need for pack support.**
+-   **Full grown wheat sheds husk, loose grain and broken straw.** Each with it's own weight.
+-   **Blown debris fades out instead of just disappearing.**
+-   **Blade and chaff colors follow a resource pack change without a restart.** 
+
 ## 1.1.16
 
 `MCWIND_PROVIDER_VERSION` **11300**, was 11200 in 1.1.15.
