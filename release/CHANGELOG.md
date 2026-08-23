@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.16
+
+`MCWIND_PROVIDER_VERSION` **11300**, was 11200 in 1.1.15.
+
+Minor bump. Every changed body is behind a define that ships off, and the new symbols need none. Hanging lanterns, cave wind calmed down, flicker fixes on vine.
+
+-   **Hanging lanterns and chains swing, as one object.** `mcw_pendantSwing(worldPos, blockCenter)`Needs `mcwind.occupancy`.
+-   **`mcw_pendantLight(blockCenter)` moves the glow with the lamp.** Not in ref pack as there is no lighting in it.
+-   **`mcw_pendantHang(blockCenter, below, strand)` if you already know your own anchor**, plus `mcw_pendantHold` and `mcw_pendantDrive` if you want the parts. Dials are `MCW_PENDANT_FRONT`, `_SWAY`, `_IDLE`, `_HANG`, `_PERIOD`, `_DAMP`, `_MEMORY` and `_TAPS`; `_TAPS` is the only one that costs frames and it costs them per vertex.
+-   **Wind stops at the cave mouth.** `mcw_caveCalm(blockCenter)` off a new AIR byte on `mcw_occupancy`: a second connectivity fill blocked by anything that stops motion so glass seals wind while daylight still reads outdoors. Applied inside every response, so no call-site changes. `MCW_CAVE_CALM` defaults to `0.0`; needs `mcwind.occupancy`.
+-   **`mcw_readAir(worldPos, cameraPos)`** for the raw data: `sky` is air-connected, `depth` is 0..127 blocks of air from daylight. Its own struct, so `mcw_Voxel` is byte-identical and no positional constructor breaks.
+-   **Vines answer a gust arriving.** `mcw_gustRise` is the leading-edge term `mcw_grassPush` already used; the hanging swing was reading a smoothed gust that no front ever showed on. `MCW_VINE_GUST` and `MCW_VINE_SURGE`, both default `0.0`.
+-   **Banners now wave.** They blow in the wind and flex. Cloth has five hinged bands, on by default all mod-side. Four new dials in foliage settings.
+-   **`mcw_occupancy` is RG8, was R8.** Only matters if you declare the sampler yourself; `.r` is the same byte it always was.
+-   **The one behavior change: `mcw_vineSwing`'s amplitude curve.** Adjust the curve to become more adapted to the wind.
+
 ## 1.1.15
 
 `MCWIND_PROVIDER_VERSION` **11200**, was 11100 in 0.1.14.

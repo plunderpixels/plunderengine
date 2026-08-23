@@ -51,7 +51,7 @@ Lastly, branch the call sites for people who don't have the Engine installed:
 major * 10000 + minor * 100 + patch
 ```
 
-It is currently **11200**, which is 1.12.0. It bumps with the provider and never with the mod versions, so this is what you should build against to find out if anyhting has changed.
+It is currently **11300**, which is 1.13.0. It bumps with the provider and never with the mod versions, so this is what you should build against to find out if anyhting has changed.
 
 ```glsl
 #if MCWIND_PROVIDER_VERSION >= 11100
@@ -104,7 +104,7 @@ In your `shaders.properties` these are read before the header gets served. They 
 | --- | --- | --- |
 | `mcwind.field` | off | the foliage responses as well as the channel decode. You want this unless you only want raw data |
 | `mcwind.volume` | off | the fog and smoke API. Implies `mcwind.field`, because it is built on the wind field |
-| `mcwind.occupancy` | off | the voxel occupancy volume. Costs a texture image unit in every program that includes us |
+| `mcwind.occupancy` | off | the voxel occupancy volume: solidity, light connectivity and air connectivity. Costs a texture image unit in every program that includes us |
 | `mcwind.lightcells` | off | the light cell volume. Same cost |
 | `mcwind.weather` | off | the weather decode: storm cells, snow bands, precipitation edges. Implies nothing, because it reads published uniforms and calls no field maths, so a sky pack can take it without buying foliage wind it will never call |
 
@@ -122,6 +122,8 @@ Call these inside `#ifdef MCWIND`.
 | `mcw_leafSway(worldPos, blockCenter, weld)` | full 3D canopy motion |
 | `mcw_vineSwing(worldPos, blockCenter, weld)` | hanging growth, added on top of the sway |
 | `mcw_stalkSway(worldPos, blockCenter, groundY)` | bamboo and cane, bending about the ground |
+| `mcw_pendantSwing(worldPos, blockCenter)` | a hanging lantern and the chain it hangs on, as one pendulum planted at its anchor |
+| `mcw_pendantLight(blockCenter)` | the offset to add to that lantern's LIGHT position, so the glow moves with the lamp |
 | `mcw_fireLean(blockCenter, topWeight)` | flame shear and flicker |
 | `mcw_rainLean(worldPos, topWeight)` | falling rain tilted into the wind |
 | `mcw_draftPush(blockCenter, cameraPos, heightWeight)` | the kick from something streaming past |
@@ -227,7 +229,7 @@ Lift dials: `MCW_VOL_LIFT` (1.0, 0 switches it off), `MCW_VOL_LIFT_SPAN` (3.0, h
 
 **3D curl is built too, and it is off unless you ask.** `MCW_VOL_CURL` ships at 0, so `mcw_windAt` returns exactly what it returns without it. Set it and the wind gains divergence-free churn scaled by your local wind speed, so still air stays still. 0.5 is a starting point, 1.0 is plainly turbulent.
 
-It arrives as a **whole vector** and moves your horizontal wind too. Keep one component of a curl and it stops being divergence-free, and a flow that can compress is what piles volumetric fog into patches that come and go. The lift above is kinematic and this term is not: a persistent froxel sim leans on this one.  
+It arrives as a **whole vector** and moves your horizontal wind too. Keep one component of a curl and it stops being divergence-free, and a flow that can compress is what piles volumetric fog into patches that come and go. The lift above is kinematic and this term is not: a persistent froxel sim leans on this one.
 
 Set `mcwind.occupancy = true` as well and the churn is shaped by distance to the nearest solid, so an eddy tightens against a wall a few blocks out. Without it you get free-stream churn everywhere, which is correct rather than broken. `mcw_volCurlAt(worldPos, groundY, t, speed)` is the term on its own, and a fifth argument takes the wall distance if you already hold one. `mcw_volCarryAt(worldPos, groundY, wallDist)` is the anchor blend it uses: 0 pinned to terrain, 1 fully carried by the wind. Pass the ground height you already have from `mcw_groundHeight`, or -1 for free air.
 
@@ -263,12 +265,21 @@ Set `mcwind.occupancy = true` for the voxel volume and `mcwind.lightcells = true
 
 | function | gives you |
 | --- | --- |
-| `mcw_readVoxel(worldPos, cameraPos)` | `mcw_Voxel { bool known; bool solid; bool sky; float depth; }` |
+| `mcw_readVoxel(worldPos, cameraPos)` | `mcw_Voxel { bool known; bool solid; bool sky; bool support; float depth; }` |
+| `mcw_readAir(worldPos, cameraPos)` | `mcw_Air { bool known; bool sky; float depth; }` |
 | `mcw_readLightCell(worldPos, cameraPos)` | `mcw_LightCell { bool known; vec3 rgb; float level; }` |
 | `mcw_inOccupancy(worldPos, cameraPos)` | whether the volume covers this position at all |
 | `mcw_trustOccupancy(worldXZ, cameraPos)` | 1 near the camera falling to 0 at the window edge, for fading |
 
-`solid` is the block being there. `sky` is that voxel's air being connected to real sky. `depth` is 0..63, the distance to the nearest sky voxel, which is what you want for cave darkness without a raymarch.
+`solid` is the block being there. `support` is anything a plant could hang from - leaves, glass, slabs, stairs, fences - none of which is solid.
+
+**The volume answers connectivity twice, and the difference is the point.**
+
+`sky` and `depth` are **light**. The fill is stopped by `solid` alone, so it walks through a window and a glazed room reads outdoors. `depth` is 0..31 to the nearest sky voxel, measured through the volume: cave darkness without a raymarch.
+
+`mcw_readAir` is **air**, added in 1.13.0. Stopped by `solid` **or** `support`, so glass and doors seal. `depth` is 0..127 measured **through air** from daylight - 0 outdoors, climbing as you walk in, pinned at 127 in a sealed room. It is breadth-first, so its negative gradient points at the opening. Its own struct because GLSL constructs positionally: fields added to `mcw_Voxel` would break any pack with a `mcw_Voxel(false, false, false, false, 0.0)` fallback.
+
+Light for how bright somewhere is, air for whether wind or fog could reach it. `mcw_caveCalm` is the air pair already turned into a multiplier, and is probably what you want.
 
 **Always pass the camera. IMPORTANT**
 
@@ -292,6 +303,82 @@ The window is 96 blocks square, so the two argument forms return `known = false`
 **`known == false` is a real answer and it is not "empty".** It means the volume cannot speak for this position. This is a failsafe so you don't read it as air which would cause some breakage.
 
 ---
+
+### Wind in Caves
+
+The field is a heightmap: an interior column reads as its own rooftop and the shelter term is floored, so **it cannot answer "no wind" underground** and cave foliage reacts to a surface storm. You cannot tune around it, because the dial you would turn down is the one making the surface work.
+
+`mcw_caveCalm(blockCenter)` answers it off the air pair: 1 outdoors, falling toward `MCW_CAVE_DRIFT` as you go in. **Applied for you inside every response**, so nothing changes at your call sites.
+
+| define | default | what it does |
+| --- | --- | --- |
+| `MCW_CAVE_CALM` | `0.0` | strength, 0..1. **Zero, so nothing changes until you ask.** At 0 the voxel read folds away as dead code |
+| `MCW_CAVE_SPAN` | `8.0` | blocks of air from daylight before the wind is fully gone |
+| `MCW_CAVE_DRIFT` | `0.02` | what is left deep inside. Zero reads as no motion at all |
+
+Needs `mcwind.occupancy`. Without it every read is unknown and the gate answers 1.0 everywhere: a missing channel is no gate, never a lockdown. This solution leaves the door open for my future cave wind behavior.
+
+### Gusts, and Gusts Arriving
+
+`mcw_gustRise(cellXZ, mcw_windPhase)` is the leading edge of a front: 0 in steady wind, positive while the gust builds, never negative. It is what makes an arrival read as an arrival rather than the wind just being stronger.
+
+The vine responses take it behind two defines, both **`0.0` by default** so your vines are byte-identical until you set them:
+
+| define | default | what it does |
+| --- | --- | --- |
+| `MCW_VINE_GUST` | `0.0` | 0..1, how far the hanging swing blends from the smoothed gust to the live one |
+| `MCW_VINE_SURGE` | `0.0` | how hard the leading edge shoves. `mcw_grassPush` uses 1.8 on the same term |
+
+### Hanging Lanterns and Chains
+
+Lantern hanging swings, chain hanging swings, and chains with a lantern hanging from it swings together. `mcw_pendantSwing` decides which by reading the world, so it needs `mcwind.occupancy = true`.
+
+```glsl
+// one material id for the lantern AND the chain, no argument between them
+position.xyz += mcw_pendantSwing(worldPos, blockCenter);
+```
+
+**Give them ONE id.** They take the same call with the same arguments and do not differ, so a second id is only a second place for them to drift apart. Shipping them split is how you get a floting lanter.
+
+**Tag the STATE, not the block.** A lantern on the floor is bolted to the floor and a chain lying along x or z is a strut between two walls.
+
+**Lanterns have mass.** so they behave 
+
+Rocking between gusts is derived by noise so it doesn't appear like a canned animation.
+
+It takes wind to cause the lantern to lean, a lot more than vines. Doubling the wind speeds increases lean by about 3 degrees. 
+
+The shove only happens on a gust front. Below `MCW_PENDANT_FRONT` the lantern does not notice the wind changing. This keeps lanterns with a little more memory as the wind shifts due to mass.
+
+**`MCW_PENDANT_FRONT` is in gust per SECOND.** The slope of the smoothed gust sits at 0.014 per second half the time and only reaches 0.066 in the top. So one per-second threshold means the same physical wind event for a two-link hang and a ten-block one. Per swing instead and a long chain is shoved by ordinary breathing while a short one ignores a storm.
+
+**`MCW_PENDANT_MEMORY` is in SWINGS rather than seconds** for the same class of reason. Tying the history window to the pendulum's own period keeps the kernel sampled the same number of times per swing, so a short hang reads as a crisp fast swing instead of as aliased noise.
+
+| define | default | what it does |
+| --- | --- | --- |
+| `MCW_PENDANT_FRONT` | `0.08` | how fast the gust must change, per second, before the lantern notices. The mass dial |
+| `MCW_PENDANT_SWAY` | `1.0` | how far a front throws it once it has noticed one |
+| `MCW_PENDANT_IDLE` | `1.0` | the rock it rests in between fronts. Zero hangs it dead still |
+| `MCW_PENDANT_HANG` | `1.0` | the steady angle the wind holds it at |
+| `MCW_PENDANT_PERIOD` | `1.15` | seconds for one swing out and back, for a strand one block long. Longer strands scale by the square root of their length |
+| `MCW_PENDANT_DAMP` | `0.85` | how much of the swing is gone after one pass |
+| `MCW_PENDANT_MEMORY` | `1.3` | how much wind the shove is built from, in swings |
+| `MCW_PENDANT_TAPS` | `5` | how finely that wind is read. The only one that costs frames per vertex |
+
+`MCW_PENDANT_LEAN_MAX` and `MCW_PENDANT_SWAY_MAX` cap the two angles inside the helper. Do not scale the result again outside. The cap is there so a cranked dial cannot lay a lamp flat.
+
+`mcw_pendantHang(blockCenter, below, strand)` is the bare pendulum if you already know your own anchor, and `mcw_pendantHold` and `mcw_pendantDrive` are the parts if you want them. Every form takes an optional trailing `float stiffness`, forwarding `MCW_PENDANT_STIFF` when omitted.
+
+### Moving the Light With It
+
+```glsl
+// wherever your pack writes a block light into its voxel grid
+vec3 lightPos = blockCenter + mcw_pendantLight(blockCenter);
+```
+
+One call, one argument. A light voxelization pass has no vertex and no entity id, so anything more is work you should not have to do. It is the same swing the mesh takes, sampled at the block center because that is where the flame sits, so the glow and the geometry cannot disagree. Do not compute it a second way.
+
+If your pack voxelizes block light, which most packs with colored lighting do, this moves it and you are done. If it doesn't, keep `MCW_PENDANT_HANG` modest so the mismatch stays under notice.
 
 ## 5\. Uniforms
 
