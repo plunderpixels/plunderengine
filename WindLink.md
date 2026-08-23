@@ -51,7 +51,7 @@ Lastly, branch the call sites for people who don't have the Engine installed:
 major * 10000 + minor * 100 + patch
 ```
 
-It is currently **11300**, which is 1.13.0. It bumps with the provider and never with the mod versions, so this is what you should build against to find out if anyhting has changed.
+It is currently **11400**, which is 1.14.0. It bumps with the provider and never with the mod versions, so this is what you should build against to find out if anyhting has changed.
 
 ```glsl
 #if MCWIND_PROVIDER_VERSION >= 11100
@@ -348,7 +348,7 @@ Rocking between gusts is derived by noise so it doesn't appear like a canned ani
 
 It takes wind to cause the lantern to lean, a lot more than vines. Doubling the wind speeds increases lean by about 3 degrees.
 
-The shove only happens on a gust front. Below `MCW_PENDANT_FRONT` the lantern does not notice the wind changing. This keeps lanterns with a little more memory as the wind shifts due to mass.
+The shove only happens on a gust front. This keeps lanterns with a little more memory as the wind shifts due to mass.
 
 **`MCW_PENDANT_FRONT` is in gust per SECOND.** The slope of the smoothed gust sits at 0.014 per second half the time and only reaches 0.066 in the top. So one per-second threshold means the same physical wind event for a two-link hang and a ten-block one. Per swing instead and a long chain is shoved by ordinary breathing while a short one ignores a storm.
 
@@ -358,15 +358,16 @@ The shove only happens on a gust front. Below `MCW_PENDANT_FRONT` the lantern do
 
 | define | default | what it does |
 | --- | --- | --- |
-| `MCW_PENDANT_FRONT` | `0.08` | how fast the gust must change, per second, before the lantern notices. The mass dial |
+| `MCW_PENDANT_FRONT` | `0.08` | LEGACY. Only read under `MCW_PENDANT_LEGACY_DRIVE` since 1.1.18 |
 | `MCW_PENDANT_SWAY` | `1.0` | how far a front throws it once it has noticed one |
 | `MCW_PENDANT_IDLE` | `1.0` | the rock it rests in between fronts. Zero hangs it dead still |
 | `MCW_PENDANT_HANG` | `1.0` | the steady angle the wind holds it at |
 | `MCW_PENDANT_PERIOD` | `1.15` | seconds for one swing out and back, for a strand one block long. Longer strands are slower by the square root of their length, and swing through a smaller angle by the same root |
-| `MCW_PENDANT_DAMP` | `0.85` | how much of the swing is gone after one pass |
-| `MCW_PENDANT_MEMORY` | `1.3` | how much wind the shove is built from, in swings |
-| `MCW_PENDANT_TAPS` | `5` | how finely that wind is read. The only one that costs frames per vertex |
-| `MCW_PENDANT_RADIUS` | `0.35` | HOW FAR IT MAY TRAVEL, in blocks, measured at the bottom of the strand. New in 1.1.17 |
+| `MCW_PENDANT_DAMP` | `0.20` | the damping ratio, and the mass dial since 1.1.18. Below 1.0 it oscillates; smaller keeps going longer. Was a tap-weighting exponent at `0.85`, so the number is not comparable across that release |
+| `MCW_PENDANT_MEMORY` | `1.3` | LEGACY. Only read under `MCW_PENDANT_LEGACY_DRIVE` since 1.1.18 |
+| `MCW_PENDANT_TAPS` | `5` | LEGACY. Only read under `MCW_PENDANT_LEGACY_DRIVE` since 1.1.18 |
+| `MCW_PENDANT_MODES` | `6` | how many wind frequencies the swing answers, 0.4 to 12 rad/s. The only one that costs frames per vertex. New in 1.1.18 |
+| `MCW_PENDANT_RADIUS` | `0.75` | HOW FAR IT MAY TRAVEL, in blocks, measured at the bottom of the strand. New in 1.1.17, raised from `0.35` in 1.1.18 |
 | `MCW_PENDANT_KNEE` | `0.6` | the fraction of that bound where it starts easing off. New in 1.1.17 |
 
 `MCW_PENDANT_LEAN_MAX` and `MCW_PENDANT_SWAY_MAX` cap the two angles inside the helper. Do not scale the result again outside. The cap is there so a cranked dial cannot lay a lamp flat.

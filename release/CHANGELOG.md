@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.18
+
+`MCWIND_PROVIDER_VERSION` **11400**, was 11300.
+
+Three new symbols: `mcw_pendulum`, `mcw_pendulumRead` and `MCW_PENDULUM`.
+
+**WindLink now requires PlunderEngine `0.1.18`.**
+
+-   **Lanterns keep swinging after the wind drops.** WindLink integrates a bank of osc per patch of air and publishes it as `mcw_pendulum`; the shader reads the two that bracket the chain. Gate on `MCW_PENDULUM`. 
+-   **The swing is solved instead of sampled.** `mcw_pendantResponse` evaluates the damped oscillator in closed form.
+-   **Chain length reaches the motion now.** 
+-   **`MCW_PENDANT_DAMP` is a damping ratio, was a tap-weighting exponent.** Default `0.85` to `0.20`. The number is not comparable across this release: `0.85` as a ratio is nearly critically damped.
+-   **`MCW_PENDANT_MODES`, default `6`.** How many wind frequencies the swing answers, 0.4 to 12 rad/s. The only pendant define that costs frames per vertex.
+-   **`MCW_PENDANT_RADIUS` default `0.35` to `0.75`.** The closed form travels further, and at `0.35` a twenty block chain sat pinned against the bound 57% of the time.
+-   **`MCW_PENDANT_FRONT`, `MCW_PENDANT_MEMORY` and `MCW_PENDANT_TAPS` are legacy.** Still defined, read only under `MCW_PENDANT_LEGACY_DRIVE`, which selects the whole 1.1.17 body.
+
 ## 1.1.17
 
 `MCWIND_PROVIDER_VERSION` **11300**, unchanged from 1.1.16.
@@ -13,7 +29,7 @@ No new symbols.
 -   **Hanging signs swing with no need for pack support.**
 -   **Full grown wheat sheds husk, loose grain and broken straw.** Each with it's own weight.
 -   **Blown debris fades out instead of just disappearing.**
--   **Blade and chaff colors follow a resource pack change without a restart.** 
+-   **Blade and chaff colors follow a resource pack change without a restart.**
 
 ## 1.1.16
 
