@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.19
+
+`MCWIND_PROVIDER_VERSION` **11500**, was 11400.
+
+One new symbol: `mcw_occRegion`.
+
+**WindLink still requires PlunderEngine `0.1.18`.** Nothing it calls moved the engine changed underneath it.
+
+Both changes are engine-side - the occupancy producer and the header, both ship in `plunderengine`.
+
+-   **The occupancy window stops being a constant that the header and the atlas each hardcode.** `mcw_occRegion` publishes its width once a frame and the header reads it, so the volume can be resized while the game runs and every voxel read still lands in the right tile. A pack that never touches it sees the shipped 96 exactly as before, and `mcw_readVoxel` outside the window answers unknown as it always did. `/plunderengine occupancy window <blocks>` moves it, 16 to 384, snapped to whole chunks. **It does not save on restart.**
+-   **`mcw_readAir` answers `known = false` in the Nether, instead of answering "sealed".** 
+-   **So `mcw_caveCalm` stops holding Nether foliage at its minimum.**
+
 ## 1.1.18
 
 `MCWIND_PROVIDER_VERSION` **11400**, was 11300.
@@ -8,9 +22,9 @@ Three new symbols: `mcw_pendulum`, `mcw_pendulumRead` and `MCW_PENDULUM`.
 
 **WindLink now requires PlunderEngine `0.1.18`.**
 
--   **Lanterns keep swinging after the wind drops.** WindLink integrates a bank of osc per patch of air and publishes it as `mcw_pendulum`; the shader reads the two that bracket the chain. Gate on `MCW_PENDULUM`. 
--   **The swing is solved instead of sampled.** `mcw_pendantResponse` evaluates the damped oscillator in closed form.
--   **Chain length reaches the motion now.** 
+-   **Lanterns keep swinging after the wind drops.** WindLink integrates a bank of oscillators per patch of air and publishes it as `mcw_pendulum`; the shader reads the two that bracket the chain. Gate on `MCW_PENDULUM`. A pack that does not read it still gets the swing, without the coasting.
+-   **The swing is solved instead of sampled.** `mcw_pendantResponse` evaluates the damped oscillator in closed form. It is smooth by construction, and it costs about a third of the tap loop it replaced.
+-   **Chain length reaches the motion now.** A long chain swings slower than a short one and the two drift out of step, because the period follows the square root of the strand instead of the drive's own rate.
 -   **`MCW_PENDANT_DAMP` is a damping ratio, was a tap-weighting exponent.** Default `0.85` to `0.20`. The number is not comparable across this release: `0.85` as a ratio is nearly critically damped.
 -   **`MCW_PENDANT_MODES`, default `6`.** How many wind frequencies the swing answers, 0.4 to 12 rad/s. The only pendant define that costs frames per vertex.
 -   **`MCW_PENDANT_RADIUS` default `0.35` to `0.75`.** The closed form travels further, and at `0.35` a twenty block chain sat pinned against the bound 57% of the time.
