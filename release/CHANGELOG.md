@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.1.20-beta
+
+`MCWIND_PROVIDER_VERSION` **11700**, was 11600.
+
+Fourteen new symbols and none removed: `mcw_readFloater`, `mcw_floaterCount`, `mcw_floaterN`, `mcw_floaterA`, `mcw_floaterB`, `mcw_Floater`, `MCW_FLOATER_MAX`, `mcw_readCanopy`, `mcw_Canopy`, `mcw_seasonOwner`, `mcw_seasonModOwnsColor`, `mcw_dayTicks`, `mcw_dayLength`, `mcw_dialLilyTurn`.
+
+**WindLink requires PlunderEngine `0.1.20-beta`.** This beta ships `0.1.21-beta`.
+
+-   **Physics Mod rides the same wind.** Grass, cloth, particles and debris all follow the same field. Install both and it happens there is nothing to configure. **Two things it doesn't reach, its volumetric smoke and its fire read no wind, and anything hanging under a solid block sits still because its own shelter test calls that indoors.** Both are Haubna's.
+-   **Snow blows instead of falling straight down.** Spindrift tears off trees and rooftops with snow sheets, ground spindrift as well, and the drift arrives on the gust's wind speed increase. Walking kicks powder off the snow as you walk.
+-   **Snow lying on a canopy moves with the canopy.** Column's top leaf published in `mcw_ground` in the B channel. Snow ontop of leaves moves with the canopy.
+-   **A floating leaf sits on your water rather than through it.** `mcw_readFloater` publishes where floating debris is and how long it has been there. This alows a pack to bob it and adjust it's placement according to the motion of the ocean.
+-   **Serene Seasons owns the season when it is installed.** Its calendar and its foliage color win. `mcw_seasonOwner` says who is deciding.
+-   **Particle based snow** Wind reactive snow with individual particles spawned. Density and weight setting sin the menu.
+-   **`mcw_dayTicks` and `mcw_dayLength` publish the real length of a day.** A season mod that varies day length no longer slides the wind's day and night rhythm out of phase with the sun it is supposed to follow.
+-   **Lily pads turn with the wind**, on `mcw_dialLilyTurn`.
+
 ## 1.1.19
 
 `MCWIND_PROVIDER_VERSION` **11500**, was 11400.
