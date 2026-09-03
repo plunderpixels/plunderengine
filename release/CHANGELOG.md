@@ -6,7 +6,7 @@
 
 Fourteen new symbols and none removed: `mcw_readFloater`, `mcw_floaterCount`, `mcw_floaterN`, `mcw_floaterA`, `mcw_floaterB`, `mcw_Floater`, `MCW_FLOATER_MAX`, `mcw_readCanopy`, `mcw_Canopy`, `mcw_seasonOwner`, `mcw_seasonModOwnsColor`, `mcw_dayTicks`, `mcw_dayLength`, `mcw_dialLilyTurn`.
 
-**WindLink requires PlunderEngine `0.1.20-beta`.** This beta ships `0.1.21-beta`.
+**WindLink requires PlunderEngine `0.1.20-beta`, and that is what this beta ships.** The engine jar and the WindLink jar carry different numbers because they version independently, not because one is newer than the other.
 
 -   **Physics Mod rides the same wind.** Grass, cloth, particles and debris all follow the same field. Install both and it happens there is nothing to configure. **Two things it doesn't reach, its volumetric smoke and its fire read no wind, and anything hanging under a solid block sits still because its own shelter test calls that indoors.** Both are Haubna's.
 -   **Snow blows instead of falling straight down.** Spindrift tears off trees and rooftops with snow sheets, ground spindrift as well, and the drift arrives on the gust's wind speed increase. Walking kicks powder off the snow as you walk.
