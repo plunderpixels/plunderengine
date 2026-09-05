@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.20-beta-1 
+Change log and reference docs incoming, test performance for now.
+
 ## 1.1.20-beta
 
 `MCWIND_PROVIDER_VERSION` **11700**, was 11600.
